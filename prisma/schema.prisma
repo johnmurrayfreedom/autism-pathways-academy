@@ -1,0 +1,290 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// User and profile models
+model User {
+  id                  String               @id @default(uuid())
+  email               String               @unique
+  passwordHash        String
+  firstName           String
+  lastName            String
+  preferredName       String?
+  accountStatus       String               @default("active")
+  verificationStatus  Boolean              @default(false)
+  role                String               @default("learner")
+  createdAt           DateTime             @default(now())
+  updatedAt           DateTime             @updatedAt
+  profile             UserProfile?
+  preferences         UserPreferences?
+  enrollments         Enrollment[]
+  progress            Progress[]
+  responses           UserResponse[]
+  assessments         LearnerAssessment[]
+  aiTutorLogs         AITutorLog[]
+  learningPaths       LearningPath[]
+  uploadedVideos      Video[]              @relation("VideoUploader")
+}
+
+model UserProfile {
+  id                  String      @id @default(uuid())
+  userId              String      @unique
+  bio                 String?
+  profilePictureUrl   String?
+  timezone            String?
+  languagePreference  String      @default("en")
+  careerGoals         Json?
+  currentOccupation   String?
+  highestEducation    String?
+  createdAt           DateTime    @default(now())
+  updatedAt           DateTime    @updatedAt
+  user                User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model UserPreferences {
+  id                  String      @id @default(uuid())
+  userId              String      @unique
+  theme               String      @default("light")
+  fontSize            Int         @default(16)
+  fontFamily          String      @default("system")
+  lineSpacing         Float       @default(1.5)
+  reducedMotion       Boolean     @default(false)
+  highContrast        Boolean     @default(false)
+  notificationSettings Json?
+  aiTutorSettings     Json?
+  createdAt           DateTime    @default(now())
+  updatedAt           DateTime    @updatedAt
+  user                User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model LearnerAssessment {
+  id                 String      @id @default(uuid())
+  userId             String
+  assessmentData     Json
+  learningStyleResults Json
+  sensoryPreferences Json
+  technicalSkillsResults Json
+  communicationPreferences Json
+  learningGoals      Json
+  accessibilityNeeds Json
+  completedAt        DateTime    @default(now())
+  updatedAt          DateTime    @updatedAt
+  user               User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+// Course and content models
+model Course {
+  id                  String      @id @default(uuid())
+  title               String
+  description         String
+  slug                String      @unique
+  category            String
+  skillLevel          String
+  estimatedDuration   Int
+  prerequisites       Json?
+  learningObjectives  Json?
+  thumbnailUrl        String?
+  isPublished         Boolean     @default(false)
+  createdAt           DateTime    @default(now())
+  updatedAt           DateTime    @updatedAt
+  modules             Module[]
+  enrollments         Enrollment[]
+}
+
+model Module {
+  id                  String      @id @default(uuid())
+  courseId            String
+  title               String
+  description         String
+  orderIndex          Int
+  estimatedDuration   Int
+  createdAt           DateTime    @default(now())
+  updatedAt           DateTime    @updatedAt
+  course              Course      @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  lessons             Lesson[]
+
+  @@unique([courseId, orderIndex])
+}
+
+model Lesson {
+  id                  String      @id @default(uuid())
+  moduleId            String
+  title               String
+  description         String
+  contentType         String
+  contentId           String
+  orderIndex          Int
+  estimatedDuration   Int
+  isPublished         Boolean     @default(false)
+  createdAt           DateTime    @default(now())
+  updatedAt           DateTime    @updatedAt
+  module              Module      @relation(fields: [moduleId], references: [id], onDelete: Cascade)
+  progress            Progress[]
+  assessments         Assessment[]
+  
+  @@unique([moduleId, orderIndex])
+}
+
+model ContentVariant {
+  id                  String      @id @default(uuid())
+  contentId           String
+  variantType         String
+  attributes          Json
+  contentData         Json
+  createdAt           DateTime    @default(now())
+  updatedAt           DateTime    @updatedAt
+}
+
+// Enrollment and progress models
+model Enrollment {
+  id                  String      @id @default(uuid())
+  userId              String
+  courseId            String
+  enrollmentDate      DateTime    @default(now())
+  completionDate      DateTime?
+  lastAccessedDate    DateTime?
+  status              String      @default("active")
+  user                User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  course              Course      @relation(fields: [courseId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, courseId])
+}
+
+model Progress {
+  id                  String      @id @default(uuid())
+  userId              String
+  lessonId            String
+  status              String      @default("not_started")
+  completionPercentage Int        @default(0)
+  lastPosition        String?
+  timeSpent           Int         @default(0)
+  completedAt         DateTime?
+  createdAt           DateTime    @default(now())
+  updatedAt           DateTime    @updatedAt
+  user                User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  lesson              Lesson      @relation(fields: [lessonId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, lessonId])
+}
+
+// Assessment models
+model Assessment {
+  id                  String      @id @default(uuid())
+  lessonId            String?
+  title               String
+  description         String
+  assessmentType      String
+  questions           Json
+  passingScore        Int
+  maxAttempts         Int?
+  timeLimit           Int?
+  createdAt           DateTime    @default(now())
+  updatedAt           DateTime    @updatedAt
+  lesson              Lesson?     @relation(fields: [lessonId], references: [id], onDelete: SetNull)
+  userResponses       UserResponse[]
+}
+
+model UserResponse {
+  id                  String      @id @default(uuid())
+  userId              String
+  assessmentId        String
+  attemptNumber       Int         @default(1)
+  responses           Json
+  score               Int?
+  feedback            Json?
+  startedAt           DateTime    @default(now())
+  completedAt         DateTime?
+  user                User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  assessment          Assessment  @relation(fields: [assessmentId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, assessmentId, attemptNumber])
+}
+
+// AI tutor models
+model AITutorLog {
+  id                  String      @id @default(uuid())
+  userId              String
+  sessionId           String
+  context             Json?
+  userMessage         String
+  aiResponse          String
+  feedbackRating      Int?
+  feedbackComment     String?
+  createdAt           DateTime    @default(now())
+  user                User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model LearningPath {
+  id                  String      @id @default(uuid())
+  userId              String
+  title               String
+  description         String
+  skillFocus          Json?
+  recommendedCourses  Json
+  customMilestones    Json?
+  createdAt           DateTime    @default(now())
+  updatedAt           DateTime    @updatedAt
+  user                User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+// Video models
+model Video {
+  id                  String      @id @default(uuid())
+  title               String
+  description         String
+  duration            Int?
+  uploadDate          DateTime    @default(now())
+  uploaderId          String
+  originalFilename    String
+  originalFileUrl     String
+  status              String      @default("processing")
+  metadata            Json?
+  createdAt           DateTime    @default(now())
+  updatedAt           DateTime    @updatedAt
+  uploader            User        @relation("VideoUploader", fields: [uploaderId], references: [id], onDelete: Cascade)
+  variants            VideoVariant[]
+  captions            VideoCaption[]
+  accessibility       VideoAccessibility?
+}
+
+model VideoVariant {
+  id                  String      @id @default(uuid())
+  videoId             String
+  format              String
+  resolution          String
+  fileUrl             String
+  fileSize            Int
+  createdAt           DateTime    @default(now())
+  video               Video       @relation(fields: [videoId], references: [id], onDelete: Cascade)
+}
+
+model VideoCaption {
+  id                  String      @id @default(uuid())
+  videoId             String
+  language            String
+  captionUrl          String
+  isAutoGenerated     Boolean     @default(true)
+  createdAt           DateTime    @default(now())
+  updatedAt           DateTime    @updatedAt
+  video               Video       @relation(fields: [videoId], references: [id], onDelete: Cascade)
+}
+
+model VideoAccessibility {
+  videoId             String      @id
+  hasFlashingContent  Boolean     @default(false)
+  hasAudioDescription Boolean     @default(false)
+  hasCaptions         Boolean     @default(false)
+  hasTranscript       Boolean     @default(false)
+  contentWarnings     Json?
+  createdAt           DateTime    @default(now())
+  updatedAt           DateTime    @updatedAt
+  video               Video       @relation(fields: [videoId], references: [id], onDelete: Cascade)
+} 
